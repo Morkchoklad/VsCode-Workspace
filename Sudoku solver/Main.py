@@ -10,9 +10,10 @@
 ##   u is a unit,   e.g. ['A1','B1','C1','D1','E1','F1','G1','H1','I1']
 ##   grid is a grid,e.g. 81 non-blank chars, e.g. starting with '.18...7...
 ##   values is a dict of possible values, e.g. {'A1':'12349', 'A2':'8', ...}
+import random
 
 def cross(A, B):
-    "Cross product of elements in A and elements in B."
+    """Cross product of elements in A and elements in B."""
     return [a+b for a in A for b in B]
 
 digits   = '123456789'
@@ -30,7 +31,7 @@ peers = dict((s, set(sum(units[s],[]))-set([s]))
 ################ Unit Tests ################
 
 def test():
-    "A set of tests that must pass."
+    """A set of tests that must pass."""
     assert len(squares) == 81
     assert len(unitlist) == 27
     assert all(len(units[s]) == 3 for s in squares)
@@ -56,7 +57,7 @@ def parse_grid(grid):
     return values
 
 def grid_values(grid):
-    "Convert grid into a dict of {square: char} with '0' or '.' for empties."
+    """Convert grid into a dict of {square: char} with '0' or '.' for empties."""
     chars = [c for c in grid if c in digits or c in '0.']
     assert len(chars) == 81
     return dict(zip(squares, chars))
@@ -99,7 +100,7 @@ def eliminate(values, s, d):
 ################ Display as 2-D grid ################
 
 def display(values):
-    "Display these values as a 2-D grid."
+    """Display these values as a 2-D grid."""
     width = 1+max(len(values[s]) for s in squares)
     line = '+'.join(['-'*(width*3)]*3)
     for r in rows:
@@ -113,31 +114,37 @@ def display(values):
 def solve(grid): return search(parse_grid(grid))
 
 def search(values):
-    "Using depth-first search and propagation, try all possible values."
+    """Using depth-first search and propagation, try all possible values."""
     if values is False:
         return False ## Failed earlier
     if all(len(values[s]) == 1 for s in squares):
         return values ## Solved!
-    ## Chose the unfilled square s with the fewest possibilities
-    ##n,s = min((len(values[s]), s) for s in squares if len(values[s]) > 1)
-    ##return some(search(assign(values.copy(), s, d))
-    ##            for d in values[s])
+    ## Choose the unfilled square s with the fewest possibilities
+    #n,s = min((len(values[s]), s) for s in squares if len(values[s]) > 1)
+    #return some(search(assign(values.copy(), s, d))
+    #            for d in values[s])
+
+    ## Choose random square and digit
+    s = random.choice(squares)
+    while not (len(values[s]) > 1):
+        s = random.choice(squares)
+    return some(search(assign(values.copy(), s, d))
+                for d in shuffled(values[s]))
 
 ################ Utilities ################
 
 def some(seq):
-    "Return some element of seq that is true."
+    """Return some element of seq that is true."""
     for e in seq:
         if e: return e
     return False
 
 def from_file(filename, sep='\n'):
-    
-    "Parse a file into a list of strings, separated by sep."
+    """Parse a file into a list of strings, separated by sep."""
     return open(filename).read().strip().split(sep)
 
 def shuffled(seq):
-    "Return a randomly shuffled copy of the input sequence."
+    """Return a randomly shuffled copy of the input sequence."""
     seq = list(seq)
     random.shuffle(seq)
     return seq
@@ -163,15 +170,15 @@ def solve_all(grids, name='', showif=0.0):
     times, results = zip(*[time_solve(grid) for grid in grids])
     N = len(grids)
     if N > 1:
-        print ("Solved %d of %d %s puzzles (avg %.2f secs (%d Hz), max %.2f secs)." % (
-            sum(results), N, name, sum(times)/N, N/sum(times), max(times)))
+        print ("Solved %d of %d %s puzzles (avg %.2f secs (%d Hz), max %.2f secs), total time : %.2f ." % (
+            sum(results), N, name, sum(times)/N, N/sum(times), max(times), sum(times)))
 
 def solved(values):
-    "A puzzle is solved if each unit is a permutation of the digits 1 to 9."
-    def unitsolved(unit): return set(values[s] for s in unit) == set(digits)
-    return values is not False and all(unitsolved(unit) for unit in unitlist)
+    """A puzzle is solved if each unit is a permutation of the digits 1 to 9."""
+    def unitSolved(unit): return set(values[s] for s in unit) == set(digits)
+    return values is not False and all(unitSolved(unit) for unit in unitlist)
 
-def random_puzzle(N=17):
+def random_puzzle(N=6):
     """Make a random puzzle with N or more assignments. Restart on contradictions.
     Note the resulting puzzle is not guaranteed to be solvable, but empirically
     about 99.8% of them are solvable. Some have multiple solutions."""
@@ -192,7 +199,7 @@ if __name__ == '__main__':
     test()
 ##    solve_all(from_file("easy50.txt", '========'), "easy", None)
     solve_all(from_file("top95.txt"), "hard", None)
-    solve_all(from_file("100sudoku.txt"), "hardest", None)
+    solve_all(from_file("1000sudoku.txt"), "hardest", None)
     solve_all([random_puzzle() for _ in range(99)], "random", 100.0)
 
 ## References used:
