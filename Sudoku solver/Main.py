@@ -131,6 +131,76 @@ def search(values):
     return some(search(assign(values.copy(), s, d))
                 for d in shuffled(values[s]))
 
+################ Hill Climbing ################
+def fill(grid):
+    """Fills the grid with values regardless of rows and column rules"""
+    for i in range(18,27) :
+        values = {'1', '2', '3', '4', '5', '6', '7', '8', '9'}
+        for s in unitlist[i] :
+            values.discard(grid[s])
+        for s in unitlist[i] :
+            if (grid[s] == '0') or (grid[s] == '.'):
+                grid[s] = values.pop()
+    return grid
+
+def score(values):
+    """Counts the number of cells in both rows and columns are in conflict"""
+    score = 0
+    for i in range(0,18) :
+        digitsSeen = set()
+        for s in unitlist[i]:
+            digitsSeen.add(values[s])
+        score += (9 - len(digitsSeen))
+    return score
+
+def hillClimbingSearch(initial):
+    """Attempts to solve a sudoku puzzle using a hill-climbing algorithm"""
+    maybeSol = fill(initial.copy())
+    hasSwapped = True
+    while hasSwapped :
+        currentScore = score(maybeSol)
+        hasSwapped = False
+        for s1 in squares :
+            if initial[s1] != '0' and (initial[s1] != '.'):
+                for s2 in units[s1][2] :
+                    if (initial[s2] != '0') and (initial[s2] != '.') and (s1 != s2):
+                        trySwap = maybeSol.copy()
+                        trySwap[s1] = maybeSol[s2]
+                        trySwap[s2] = maybeSol[s1]
+                        if score(trySwap) < currentScore:
+                            maybeSol = trySwap.copy()
+                            hasSwapped = True
+    return maybeSol
+
+def solveHC(grid):
+    return hillClimbingSearch(grid_values(grid))
+
+def solvedHC(grid):
+    """A grid is only solved if its score is 0 (there are no conflicts in the grid)"""
+    return score(grid) == 0
+
+def solve_all_HC(grids, name='', showif=0.0):
+    """Attempt to solve a sequence of grids using the hill climbing algorithm. Report results.
+    When showif is a number of seconds, display puzzles that take longer.
+    When showif is None, don't display any puzzles."""
+    def time_solve(grid):
+        start = time.time()
+        values = solveHC(grid)
+        t = time.time()-start
+        ## Display puzzles that take long enough
+        if showif is not None and t > showif:
+            display(grid_values(grid))
+            if values: display(values)
+            print ('(%.2f seconds)\n' % t)
+        return (t, solvedHC(values))
+    times, results = zip(*[time_solve(grid) for grid in grids])
+    N = len(grids)
+    if N > 1:
+        print ("Solved %d of %d %s puzzles (avg %.2f secs (%d Hz), max %.2f secs), total time : %.2f ." % (
+            sum(results), N, name, sum(times)/N, N/sum(times), max(times), sum(times)))
+
+
+
 ################ Utilities ################
 
 def some(seq):
@@ -152,6 +222,8 @@ def shuffled(seq):
 ################ System test ################
 
 import time, random
+
+
 
 def solve_all(grids, name='', showif=0.0):
     """Attempt to solve a sequence of grids. Report results.
@@ -178,7 +250,7 @@ def solved(values):
     def unitSolved(unit): return set(values[s] for s in unit) == set(digits)
     return values is not False and all(unitSolved(unit) for unit in unitlist)
 
-def random_puzzle(N=6):
+def random_puzzle(N=60):
     """Make a random puzzle with N or more assignments. Restart on contradictions.
     Note the resulting puzzle is not guaranteed to be solvable, but empirically
     about 99.8% of them are solvable. Some have multiple solutions."""
@@ -199,8 +271,9 @@ if __name__ == '__main__':
     test()
 ##    solve_all(from_file("easy50.txt", '========'), "easy", None)
     solve_all(from_file("top95.txt"), "hard", None)
+    solve_all_HC(from_file("100sudoku.txt"), "hard", None)
     solve_all(from_file("1000sudoku.txt"), "hardest", None)
-    solve_all([random_puzzle() for _ in range(99)], "random", 100.0)
+    solve_all_HC([random_puzzle() for _ in range(99)], "random", 100.0)
 
 ## References used:
 ## http://www.scanraid.com/BasicStrategies.htm
