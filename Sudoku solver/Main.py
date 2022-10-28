@@ -86,6 +86,22 @@ def eliminate(values, s, d):
         d2 = values[s]
         if not all(eliminate(values, s2, d2) for s2 in peers[s]):
             return False
+    ## (Added) Naked pairs
+    elif len(values[s]) == 2:
+        pair = values[s]
+        pair_values = list(pair)
+        if pair_values[0] != pair_values[1]:
+            for u in units[s]:
+                pair_peer = None
+                for peer in u:
+                    if s != peer and len(values[peer]) == 2 and set(values[peer]) == set(pair):
+                        pair_peer = peer
+                        break
+                if pair_peer is not None:
+                    if not all(eliminate(values, s2, pair_values[0]) for s2 in u if s2 != s and s2 != pair_peer):
+                        return False
+                    if not all(eliminate(values, s2, pair_values[1]) for s2 in u if s2 != s and s2 != pair_peer):
+                        return False
     ## (2) If a unit u is reduced to only one place for a value d, then put it there.
     for u in units[s]:
         dplaces = [s for s in u if d in values[s]]
