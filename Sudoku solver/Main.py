@@ -86,6 +86,28 @@ def eliminate(values, s, d):
         d2 = values[s]
         if not all(eliminate(values, s2, d2) for s2 in peers[s]):
             return False
+    ## (Added) Naked pairs
+    elif len(values[s]) == 2:
+        pair = values[s]
+        pair_values = list(pair)
+        if pair_values[0] != pair_values[1]:
+            for u in units[s]:
+                pair_peer = None
+                for peer in u:
+                    ## TODO SHOULD MAKE IT SO CONTENT OF VALUES SAME so '26' and '62' same
+                    if s != peer and len(values[peer]) == 2 and values[peer] == pair:
+                        pair_peer = peer
+                        break
+                if pair_peer is not None:
+                    if not all(eliminate(values, s2, pair_values[0]) for s2 in u if s2 != s and s2 != pair_peer):
+                        return False
+                    if not all(eliminate(values, s2, pair_values[1]) for s2 in u if s2 != s and s2 != pair_peer):
+                        return False
+                    # for peer in u:
+                    #     if s != peer and peer != pair_peer:
+                    #         values[peer].replace(pair_values[0], '')
+                    #         values[peer].replace(pair_values[1], '')
+    ## TODO RUN LOCKED_CANDIDATES HERE???
     ## (2) If a unit u is reduced to only one place for a value d, then put it there.
     for u in units[s]:
         dplaces = [s for s in u if d in values[s]]
@@ -130,6 +152,122 @@ def search(values):
         s = random.choice(squares)
     return some(search(assign(values.copy(), s, d))
                 for d in shuffled(values[s]))
+
+################ Naked Twins ######################
+
+
+
+################ Locked Candidates ################
+
+ROW = [cross(r, cols) for r in rows]
+COL = [cross(rows, c) for c in cols]
+
+def sum_col(list):
+    col1,col2,col3 = sum_strings(list[0:9:3]), sum_strings(list[1:9:3]), sum_strings(list[2:9:3])
+    columns = [col1,col2,col3]
+    columns_dict = {col1:[0,3,6], col2:[1,4,7], col3: [2,5,8]}
+    columns_non_null = [x for x in columns if x != 0]
+    if len(columns_non_null) == 1 and columns_non_null[0] >= 2:
+        return columns_dict[columns_non_null[0]]
+    else:
+        return None
+
+def sum_row(list):
+    row1,row2,row3 = sum_strings(list[0:3]), sum_strings(list[3:6]), sum_strings(list[6:9])
+    rows = [row1,row2,row3]
+    rows_dict = {row1:[0,1,2], row2:[3,4,5], row3: [6,7,8]}
+    rows_non_null = [x for x in rows if x != 0]
+    if len(rows_non_null) == 1 and rows_non_null[0] >= 2:
+        return rows_dict[rows_non_null[0]]
+    else:
+        return None
+
+def sum_strings(list):
+    sum = 0
+    for n in list:
+        sum += int(n)
+    return sum
+
+def remove_from_list(string, d):
+    new_list = list(string)
+    if d in new_list:
+        new_list.remove(d)
+    return "".join(new_list)
+
+
+# If a digit only appears on certain rows/cols of a box,
+# eliminate from other rows/cols
+def locked_candidates_1(values):
+    # eventually we need to look at all units_list, for now we check boxes
+    boxes = [cross(rs, cs) for rs in ('ABC','DEF','GHI') for cs in ('123','456','789')]
+    chosen_box = None
+    for box in boxes:
+        chosen_box = box
+        temp_digits = '123456789'
+        # presuppose correct boxes digits and no duplicates
+        for square in chosen_box:
+            if len(values[square]) == 1:
+                temp_digits = temp_digits.replace(values[square], '')
+        for digit in list(temp_digits):
+            digit_present = list('000000000')
+            for i,square in enumerate(chosen_box):
+                if len(values[square]) > 1 and digit in values[square]:
+                    digit_present[i] = '1'
+            locked_col = sum_col(digit_present)
+            locked_row = sum_row(digit_present)
+            if locked_col is not None:
+                chosen_col = []
+                real_col = []
+                rest_col = []
+                for index in locked_col:
+                    chosen_col.append(chosen_box[index])
+                for c in COL:
+                    if chosen_col[0] in c:
+                        real_col = c
+                        break
+                rest_col = [x for x in real_col if x not in chosen_col]
+                for key in rest_col:
+                    values[key] = remove_from_list(values[key], digit)
+            if locked_row is not None:
+                chosen_row = []
+                real_row = []
+                rest_row = []
+                for index in locked_row:
+                    chosen_row.append(chosen_box[index])
+                for r in ROW:
+                    if chosen_row[0] in r:
+                        real_row = r
+                        break
+                rest_row = [x for x in real_row if x not in chosen_row]
+                for key in rest_row:
+                    values[key] = remove_from_list(values[key], digit)
+    return values
+
+
+def test_locked_candidates_1():
+    """
+    Let's suppose this configuration
+    . . . |9 . . |4 3 . 
+    . . 2 |6 . . |9 . . 
+    . 9 . |. . 3 |. . 7
+    ------+------+------
+    Since candidate 2's right right box only appears in bottom row,
+    we can discard cells in that row outside that box from having 2's.
+    """
+    temp_values = {
+        'A1':'16','A2':'1578','A3':'157','A4':'9','A5':'12578','A6':'1258','A7':'4','A8':'3','A9':'1568',
+        'B1':'134','B2':'134578','B3':'2','B4':'6','B5':'14578','B6':'158','B7':'9','B8':'58','B9':'158',
+        'C1':'146','C2':'9','C3':'145','C4':'245','C5':'12458','C6':'3','C7':'268','C8':'2568','C9':'7'
+    }
+
+    end_values = {
+        'A1':'16','A2':'1578','A3':'157','A4':'9','A5':'12578','A6':'1258','A7':'4','A8':'3','A9':'1568',
+        'B1':'134','B2':'134578','B3':'2','B4':'6','B5':'14578','B6':'158','B7':'9','B8':'58','B9':'158',
+        'C1':'146','C2':'9','C3':'145','C4':'45','C5':'1458','C6':'3','C7':'268','C8':'2568','C9':'7'
+    }
+    return locked_candidates_1(temp_values) == end_values
+
+print(test_locked_candidates_1())
 
 ################ Utilities ################
 
