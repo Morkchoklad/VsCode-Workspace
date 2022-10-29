@@ -46,13 +46,13 @@ def test():
 
 ################ Parse a Grid ################
 
-def parse_grid(grid):
+def parse_grid(grid, solveType):
     """Convert grid to a dict of possible values, {square: digits}, or
     return False if a contradiction is detected."""
     ## To start, every square can be any digit; then assign values from the grid.
     values = dict((s, digits) for s in squares)
     for s,d in grid_values(grid).items():
-        if d in digits and not assign(values, s, d):
+        if d in digits and not assign(values, s, d, solveType):
             return False ## (Fail if we can't assign d to square s.)
     return values
 
@@ -64,16 +64,16 @@ def grid_values(grid):
 
 ################ Constraint Propagation ################
 
-def assign(values, s, d):
+def assign(values, s, d, solveType):
     """Eliminate all the other values (except d) from values[s] and propagate.
     Return values, except return False if a contradiction is detected."""
     other_values = values[s].replace(d, '')
-    if all(eliminate(values, s, d2) for d2 in other_values):
+    if all(eliminate(values, s, d2, solveType) for d2 in other_values):
         return values
     else:
         return False
 
-def eliminate(values, s, d):
+def eliminate(values, s, d, solveType):
     """Eliminate d from values[s]; propagate when values or places <= 2.
     Return values, except return False if a contradiction is detected."""
     if d not in values[s]:
@@ -84,24 +84,25 @@ def eliminate(values, s, d):
         return False ## Contradiction: removed last value
     elif len(values[s]) == 1:
         d2 = values[s]
-        if not all(eliminate(values, s2, d2) for s2 in peers[s]):
+        if not all(eliminate(values, s2, d2, solveType) for s2 in peers[s]):
             return False
     ## (Added) Naked pairs
-    elif len(values[s]) == 2:
-        pair = values[s]
-        pair_values = list(pair)
-        if pair_values[0] != pair_values[1]:
-            for u in units[s]:
-                pair_peer = None
-                for peer in u:
-                    if s != peer and len(values[peer]) == 2 and set(values[peer]) == set(pair):
-                        pair_peer = peer
-                        break
-                if pair_peer is not None:
-                    if not all(eliminate(values, s2, pair_values[0]) for s2 in u if s2 != s and s2 != pair_peer):
-                        return False
-                    if not all(eliminate(values, s2, pair_values[1]) for s2 in u if s2 != s and s2 != pair_peer):
-                        return False
+    if solveType == 'n':
+        if len(values[s]) == 2:
+            pair = values[s]
+            pair_values = list(pair)
+            if pair_values[0] != pair_values[1]:
+                for u in units[s]:
+                    pair_peer = None
+                    for peer in u:
+                        if s != peer and len(values[peer]) == 2 and set(values[peer]) == set(pair):
+                            pair_peer = peer
+                            break
+                    if pair_peer is not None:
+                        if not all(eliminate(values, s2, pair_values[0], solveType) for s2 in u if s2 != s and s2 != pair_peer):
+                            return False
+                        if not all(eliminate(values, s2, pair_values[1], solveType) for s2 in u if s2 != s and s2 != pair_peer):
+                            return False
     ## (2) If a unit u is reduced to only one place for a value d, then put it there.
     for u in units[s]:
         dplaces = [s for s in u if d in values[s]]
@@ -109,7 +110,7 @@ def eliminate(values, s, d):
             return False ## Contradiction: no place for this value
         elif len(dplaces) == 1:
             # d can only be in one place in unit; assign it there
-            if not assign(values, dplaces[0], d):
+            if not assign(values, dplaces[0], d, solveType):
                 return False
     return values
 
@@ -127,25 +128,28 @@ def display(values):
 
 ################ Search ################
 
-def solve(grid): return search(parse_grid(grid))
+def solve(grid, solveType): return search(parse_grid(grid, solveType), solveType)
 
-def search(values):
+def search(values, solveType):
     """Using depth-first search and propagation, try all possible values."""
     if values is False:
         return False ## Failed earlier
     if all(len(values[s]) == 1 for s in squares):
         return values ## Solved!
-    ## Choose the unfilled square s with the fewest possibilities
-    #n,s = min((len(values[s]), s) for s in squares if len(values[s]) > 1)
-    #return some(search(assign(values.copy(), s, d))
-    #            for d in values[s])
 
-    ## Choose random square and digit
-    s = random.choice(squares)
-    while not (len(values[s]) > 1):
+    if solveType == 'r' :
+        ## Choose random square and digit
         s = random.choice(squares)
-    return some(search(assign(values.copy(), s, d))
+        while not (len(values[s]) > 1):
+            s = random.choice(squares)
+        return some(search(assign(values.copy(), s, d, solveType), solveType)
                 for d in shuffled(values[s]))
+
+    ## Choose the unfilled square s with the fewest possibilities
+    n,s = min((len(values[s]), s) for s in squares if len(values[s]) > 1)
+    return some(search(assign(values.copy(), s, d, solveType), solveType)
+                for d in values[s])
+
 
 ################ Hill Climbing ################
 def fill(grid):
@@ -191,31 +195,6 @@ def hillClimbingSearch(initial):
 def solveHC(grid):
     return hillClimbingSearch(grid_values(grid))
 
-def solvedHC(grid):
-    """A grid is only solved if its score is 0 (there are no conflicts in the grid)"""
-    return score(grid) == 0
-
-def solve_all_HC(grids, name='', showif=0.0):
-    """Attempt to solve a sequence of grids using the hill climbing algorithm. Report results.
-    When showif is a number of seconds, display puzzles that take longer.
-    When showif is None, don't display any puzzles."""
-    def time_solve(grid):
-        start = time.time()
-        values = solveHC(grid)
-        t = time.time()-start
-        ## Display puzzles that take long enough
-        if showif is not None and t > showif:
-            display(grid_values(grid))
-            if values: display(values)
-            print ('(%.2f seconds)\n' % t)
-        return (t, solvedHC(values))
-    times, results = zip(*[time_solve(grid) for grid in grids])
-    N = len(grids)
-    if N > 1:
-        print ("Solved %d of %d %s puzzles (avg %.2f secs (%d Hz), max %.2f secs), total time : %.2f ." % (
-            sum(results), N, name, sum(times)/N, N/sum(times), max(times), sum(times)))
-
-
 
 ################ Utilities ################
 
@@ -238,31 +217,36 @@ def shuffled(seq):
 ################ System test ################
 
 import time, random
-
-
-
-def solve_all(grids, name='', showif=0.0):
+def solve_all(grids, solveType, name='', showif=0.0):
     """Attempt to solve a sequence of grids. Report results.
     When showif is a number of seconds, display puzzles that take longer.
-    When showif is None, don't display any puzzles."""
+    When showif is None, don't display any puzzles.
+    solveType determines the algorithm used to solve the puzzle :
+    'r' means random (number 2 of the assignment)
+    'h' means hill climbing (number 3)
+    'n' means naked pair (number 4)
+    any other entry calls for the default algorithm using the cell with the fewest options"""
     def time_solve(grid):
         start = time.time()
-        values = solve(grid)
+        if solveType == 'h' : values = solveHC(grid)
+        else : values = solve(grid, solveType)
         t = time.time()-start
         ## Display puzzles that take long enough
         if showif is not None and t > showif:
             display(grid_values(grid))
             if values: display(values)
             print ('(%.2f seconds)\n' % t)
-        return (t, solved(values))
+        return (t, solved(values, solveType))
     times, results = zip(*[time_solve(grid) for grid in grids])
     N = len(grids)
     if N > 1:
         print ("Solved %d of %d %s puzzles (avg %.2f secs (%d Hz), max %.2f secs), total time : %.2f ." % (
             sum(results), N, name, sum(times)/N, N/sum(times), max(times), sum(times)))
 
-def solved(values):
-    """A puzzle is solved if each unit is a permutation of the digits 1 to 9."""
+def solved(values, solveType):
+    """A puzzle is solved if each unit is a permutation of the digits 1 to 9 for the usual algorithm. For Hill climbing
+    it is only solved when the score of the grid is equal to 0."""
+    if solveType == 'h': return score(values) == 0
     def unitSolved(unit): return set(values[s] for s in unit) == set(digits)
     return values is not False and all(unitSolved(unit) for unit in unitlist)
 
@@ -285,11 +269,15 @@ hard1  = '.....6....59.....82....8....45........3........6..3.54...325..6.......
     
 if __name__ == '__main__':
     test()
-##    solve_all(from_file("easy50.txt", '========'), "easy", None)
-    solve_all(from_file("top95.txt"), "hard", None)
-    solve_all_HC(from_file("100sudoku.txt"), "hard", None)
-    solve_all(from_file("1000sudoku.txt"), "hardest", None)
-    solve_all_HC([random_puzzle() for _ in range(99)], "random", 100.0)
+##    The second argument determines the heuristics/algorithm used :
+##    'r' means random (number 2 of the assignment)
+##    'h' means hill climbing (number 3)
+##    'n' means naked pair (number 4)
+##    any other entry calls for the default algorithm using the cell with the fewest options
+    solve_all(from_file("100sudoku.txt"), 'r', None, None)
+    solve_all(from_file("100sudoku.txt"), 'h', None, None)
+    solve_all(from_file("100sudoku.txt"), 'n', None, None)
+    solve_all(from_file("100sudoku.txt"), None, None, None)
 
 ## References used:
 ## http://www.scanraid.com/BasicStrategies.htm
